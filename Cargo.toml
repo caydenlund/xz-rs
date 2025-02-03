@@ -2,5 +2,11 @@
 name = "xz-rs"
 version = "0.1.0"
 edition = "2021"
-
-[dependencies]
+license = "MIT"
+description = "A pure-Rust implementation of xz-utils"
+homepage = "https://github.com/caydenlund/xz-rs"
+repository = "https://github.com/caydenlund/xz-rs"
+documentation = "https://docs.rs/xz-rs"
+keywords = ["compression", "decompression", "lzma", "xz"]
+categories = ["compression"]
+authors = ["Cayden Lund <caydenlund@gmail.com>"]
