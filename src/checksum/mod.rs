@@ -1,3 +1,6 @@
+mod crc32;
+pub use crc32::*;
+
 pub trait Checksum {
     type Word;
     type Result;
