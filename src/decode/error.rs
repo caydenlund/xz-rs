@@ -4,6 +4,7 @@ use std::fmt::Display;
 #[derive(Debug, Clone)]
 pub enum DecodeError {
     InvalidHeader,
+    InvalidFooter,
     ReservedStreamFlags,
 }
 
