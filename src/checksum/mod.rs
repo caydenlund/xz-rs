@@ -1,3 +1,6 @@
+mod crc64;
+pub use crc64::*;
+
 pub trait Checksum {
     type Word;
     type Result;
