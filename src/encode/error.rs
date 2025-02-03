@@ -4,6 +4,7 @@ use std::fmt::Display;
 #[derive(Debug)]
 pub enum EncodeError {
     WriteError(std::io::Error),
+    ReservedStreamFlags,
 }
 
 impl Display for EncodeError {
