@@ -40,9 +40,6 @@ impl StreamFlags {
 
         let mut crc_32 = Crc32::new();
         crc_32.process_words(&flag_bytes);
-        flag_bytes
-            .into_iter()
-            .for_each(|byte| crc_32.process_next_word(&byte));
 
         Some(crc_32.result())
     }
