@@ -1,5 +1,5 @@
 use super::{Decode, Encode};
-use crate::error::{DecodeResult, EncodeResult};
+use crate::error::{DecodeError, DecodeResult, EncodeResult};
 use std::io::BufRead;
 
 pub struct VarLengthInt(pub u64);
@@ -21,16 +21,28 @@ impl Encode for VarLengthInt {
 
 impl Decode for VarLengthInt {
     fn decode<R: BufRead>(src: &mut R) -> DecodeResult<Self> {
+        let err = Err(DecodeError::VliOverflowError);
+
         let mut bytes = [0u8];
-        src.read_exact(&mut bytes)?;
 
         let mut result = bytes[0] as u64;
-        let mut shift = 7;
+        let mut shift = 0;
 
-        while bytes[0] > 0x80 {
-            src.read_exact(&mut bytes)?;
-            result |= ((bytes[0] & 0x79) as u64) << shift;
+        while src.read_exact(&mut bytes).is_ok() {
+            result |= ((bytes[0] & 0x7F) as u64) << shift;
+
+            if (bytes[0] & 0x80) == 0 {
+                return if bytes[0] == 0 && shift != 0 {
+                    err
+                } else {
+                    Ok(VarLengthInt(result))
+                };
+            }
+
             shift += 7;
+            if shift == 63 {
+                return err;
+            }
         }
 
         Ok(VarLengthInt(result))

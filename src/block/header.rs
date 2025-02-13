@@ -75,7 +75,7 @@ impl Decode for BlockHeader {
             None
         };
 
-        let uncompressed_size = if flags.has_compressed_size {
+        let uncompressed_size = if flags.has_uncompressed_size {
             let size = VarLengthInt::decode(&mut src)?.0;
             if size == 0 {
                 return err;
