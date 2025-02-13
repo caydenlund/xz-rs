@@ -1,50 +1,32 @@
-use std::result::Result;
-
-use crate::checksum::{Checksum, Crc32};
-use crate::decode::{Decode, DecodeError};
-use crate::encode::Encode;
-
 use super::{StreamDecodeError, StreamFlagsError};
+use crate::checksum::{Checksum, Crc32};
+use crate::error::{DecodeError, DecodeResult, EncodeResult};
+use crate::util::{Decode, Encode};
+use std::io::BufRead;
+use std::result::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamFlags {
-    // 0x00: 0 bytes
-    None,
-
-    // 0x01: 4 bytes
-    Crc32,
-
-    // 0x04: 8 bytes
-    Crc64,
-
-    // 0x0A: 32 bytes
-    Sha256,
+    None,   // 0x0
+    Crc32,  // 0x1
+    Crc64,  // 0x4
+    Sha256, // 0xA
 }
 
-impl StreamFlags {
-    fn flag_encoding(&self) -> [u8; 2] {
-        match self {
+impl Encode for StreamFlags {
+    fn encode(&self) -> EncodeResult<Vec<u8>> {
+        let flag_enc = match self {
             StreamFlags::None => [0, 0x0],
             StreamFlags::Crc32 => [0, 0x1],
             StreamFlags::Crc64 => [0, 0x4],
             StreamFlags::Sha256 => [0, 0xA],
-        }
-    }
-
-    pub fn crc_32(&self) -> u32 {
-        let mut crc_32 = Crc32::new();
-        crc_32.process_words(&self.flag_encoding());
-
-        crc_32.result()
-    }
-}
-
-impl Encode for StreamFlags {
-    fn encoding(&self) -> Vec<u8> {
-        self.flag_encoding()
+        };
+        let mut crc32 = Crc32::new();
+        crc32.process_words(&flag_enc);
+        Ok(flag_enc
             .into_iter()
-            .chain(self.crc_32().to_le_bytes())
-            .collect()
+            .chain(crc32.result().to_le_bytes())
+            .collect())
     }
 }
 
@@ -70,9 +52,23 @@ impl TryFrom<&[u8; 2]> for StreamFlags {
 }
 
 impl Decode for StreamFlags {
-    fn decode<R: std::io::Read>(src: &mut R) -> Result<Self, DecodeError> {
+    fn decode<R: BufRead>(src: &mut R) -> DecodeResult<Self> {
+        use StreamFlagsError::*;
+        let err = |e| Err(DecodeError::from(StreamDecodeError::from(e)));
+
         let mut bytes = [0u8; 2];
         src.read_exact(&mut bytes)?;
-        Self::try_from(&bytes)
+
+        if bytes[0] != 0 {
+            return err(InvalidStreamFlags);
+        }
+
+        match bytes[1] {
+            0x0 => Ok(StreamFlags::None),
+            0x1 => Ok(StreamFlags::Crc32),
+            0x4 => Ok(StreamFlags::Crc64),
+            0xA => Ok(StreamFlags::Sha256),
+            _ => err(ReservedStreamFlags),
+        }
     }
 }

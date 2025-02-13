@@ -1,10 +1,8 @@
-use std::io::Read;
-
+use super::StreamDecodeError;
 use crate::checksum::{Checksum, Crc32};
-use crate::decode::{Decode, DecodeError, RecordedReader};
-use crate::encode::Encode;
-
-use super::{BlockDecodeError, VarLengthInt};
+use crate::error::{DecodeError, DecodeResult, EncodeResult};
+use crate::util::{CheckedReader, Decode, Encode, VarLengthInt};
+use std::io::{BufRead, Read};
 
 #[derive(Debug, Clone)]
 pub struct IndexRecord {
@@ -18,9 +16,11 @@ pub struct BlockIndex {
 }
 
 impl Decode for BlockIndex {
-    fn decode<R: std::io::Read>(src: &mut R) -> Result<Self, DecodeError> {
-        let err = Err(DecodeError::BlockError(BlockDecodeError::InvalidIndex));
-        let mut src = RecordedReader::new(src);
+    fn decode<R: BufRead>(src: &mut R) -> DecodeResult<Self> {
+        let err = Err(DecodeError::StreamDecodeError(
+            StreamDecodeError::InvalidIndex,
+        ));
+        let mut src = CheckedReader::new(src);
 
         let mut bytes = [0u8];
         src.read_exact(&mut bytes)?;
@@ -42,7 +42,7 @@ impl Decode for BlockIndex {
             });
         }
 
-        let padding_size = (4 - ((src.len() + 4) % 4)) % 4;
+        let padding_size = (4 - ((src.buffer().len() + 4) % 4)) % 4;
         let mut padding = vec![0u8; padding_size];
         src.read_exact(&mut padding)?;
 
@@ -64,14 +64,14 @@ impl Decode for BlockIndex {
 }
 
 impl Encode for BlockIndex {
-    fn encoding(&self) -> Vec<u8> {
+    fn encode(&self) -> EncodeResult<Vec<u8>> {
         let mut bytes = vec![0];
 
-        bytes.extend_from_slice(&VarLengthInt(self.records.len() as u64).encoding());
+        bytes.extend_from_slice(&VarLengthInt(self.records.len() as u64).encode()?);
 
         for record in &self.records {
-            bytes.extend_from_slice(&VarLengthInt(record.uncompressed_size).encoding());
-            bytes.extend_from_slice(&VarLengthInt(record.unpadded_size).encoding());
+            bytes.extend_from_slice(&VarLengthInt(record.uncompressed_size).encode()?);
+            bytes.extend_from_slice(&VarLengthInt(record.unpadded_size).encode()?);
         }
 
         let padding_needed = (4 - ((bytes.len() + 4) % 4)) % 4;
@@ -81,6 +81,6 @@ impl Encode for BlockIndex {
         crc32.process_words(&bytes);
         bytes.extend_from_slice(&crc32.result().to_le_bytes());
 
-        bytes
+        Ok(bytes)
     }
 }

@@ -1,10 +1,11 @@
-use crate::decode::{Decode, DecodeError};
-use crate::encode::Encode;
+use super::{Decode, Encode};
+use crate::error::{DecodeResult, EncodeResult};
+use std::io::BufRead;
 
 pub struct VarLengthInt(pub u64);
 
 impl Encode for VarLengthInt {
-    fn encoding(&self) -> Vec<u8> {
+    fn encode(&self) -> EncodeResult<Vec<u8>> {
         let mut bytes = Vec::new();
         let mut value = self.0;
 
@@ -14,12 +15,12 @@ impl Encode for VarLengthInt {
         }
 
         bytes.push(value as u8);
-        bytes
+        Ok(bytes)
     }
 }
 
 impl Decode for VarLengthInt {
-    fn decode<R: std::io::Read>(src: &mut R) -> Result<Self, DecodeError> {
+    fn decode<R: BufRead>(src: &mut R) -> DecodeResult<Self> {
         let mut bytes = [0u8];
         src.read_exact(&mut bytes)?;
 

@@ -19,4 +19,7 @@ pub enum StreamDecodeError {
 
     #[error("Invalid stream footer")]
     InvalidFooter,
+
+    #[error("Invalid stream index")]
+    InvalidIndex,
 }

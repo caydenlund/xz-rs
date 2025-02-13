@@ -20,6 +20,7 @@ static CRC32_TABLE: [u32; 256] = {
     table
 };
 
+#[derive(Debug, Clone)]
 pub struct Crc32(u32);
 
 impl Crc32 {

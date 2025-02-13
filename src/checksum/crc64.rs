@@ -20,6 +20,7 @@ static CRC64_TABLE: [u64; 256] = {
     table
 };
 
+#[derive(Debug, Clone)]
 pub struct Crc64(u64);
 
 impl Crc64 {

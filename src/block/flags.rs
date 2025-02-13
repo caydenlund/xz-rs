@@ -1,6 +1,6 @@
 use crate::block::BlockDecodeError;
-use crate::decode::{Decode, DecodeError};
-use crate::encode::Encode;
+use crate::error::{DecodeError, DecodeResult, EncodeResult};
+use crate::util::{Decode, Encode};
 
 #[derive(Debug, Clone)]
 pub struct BlockFlags {
@@ -15,7 +15,7 @@ const HAS_COMPRESSED_SIZE_MASK: u8 = 0x40;
 const HAS_UNCOMPRESSED_SIZE_MASK: u8 = 0x80;
 
 impl Encode for BlockFlags {
-    fn encoding(&self) -> Vec<u8> {
+    fn encode(&self) -> EncodeResult<Vec<u8>> {
         let filter_count = (self.filter_count - 1) & FILTER_COUNT_MASK;
 
         let has_compressed_size = if self.has_compressed_size {
@@ -30,12 +30,14 @@ impl Encode for BlockFlags {
             0
         };
 
-        vec![filter_count | has_compressed_size | has_uncompressed_size]
+        Ok(vec![
+            filter_count | has_compressed_size | has_uncompressed_size,
+        ])
     }
 }
 
 impl Decode for BlockFlags {
-    fn decode<R: std::io::Read>(src: &mut R) -> Result<Self, DecodeError> {
+    fn decode<R: std::io::Read>(src: &mut R) -> DecodeResult<Self> {
         let mut bytes = [0u8];
         src.read_exact(&mut bytes)?;
         let byte = bytes[0];
@@ -46,8 +48,11 @@ impl Decode for BlockFlags {
         let has_uncompressed_size = (byte & HAS_UNCOMPRESSED_SIZE_MASK) > 0;
 
         if reserved > 0 {
-            return Err(DecodeError::BlockError(BlockDecodeError::InvalidHeader));
+            return Err(DecodeError::BlockDecodeError(
+                BlockDecodeError::InvalidHeader,
+            ));
         }
+
         Ok(Self {
             filter_count,
             has_compressed_size,

@@ -1,19 +1,21 @@
 use crate::block::BlockDecodeError;
 use crate::stream::StreamDecodeError;
-
+use std::io::Error;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DecodeError {
     #[error("Invalid stream: {0}")]
-    StreamError(#[from] StreamDecodeError),
+    StreamDecodeError(#[from] StreamDecodeError),
 
     #[error("Invalid block: {0}")]
-    BlockError(#[from] BlockDecodeError),
+    BlockDecodeError(#[from] BlockDecodeError),
 
-    #[error("Error reading data: {0}")]
-    ReadError(#[from] std::io::Error),
+    #[error("I/O error: {0}")]
+    IoError(#[from] Error),
 
     #[error("VLI overflow")]
     VliOverflowError,
 }
+
+pub type DecodeResult<T> = Result<T, DecodeError>;

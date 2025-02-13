@@ -1,11 +1,9 @@
-use std::io::{Cursor, Read};
-
+use super::{BlockFlags, Filter};
 use crate::block::BlockDecodeError;
 use crate::checksum::{Checksum, Crc32};
-use crate::decode::{Decode, DecodeError, RecordedReader};
-use crate::encode::Encode;
-
-use super::{BlockFlags, Filter, VarLengthInt};
+use crate::error::{DecodeError, DecodeResult, EncodeResult};
+use crate::util::{CheckedReader, Decode, Encode, VarLengthInt};
+use std::io::{BufRead, Cursor, Read};
 
 #[derive(Debug, Clone)]
 pub struct BlockHeader {
@@ -16,19 +14,19 @@ pub struct BlockHeader {
 }
 
 impl Encode for BlockHeader {
-    fn encoding(&self) -> Vec<u8> {
-        let mut bytes = self.flags.encoding();
+    fn encode(&self) -> EncodeResult<Vec<u8>> {
+        let mut bytes = self.flags.encode()?;
 
         for filter in &self.filters {
-            bytes.extend_from_slice(&filter.encoding());
+            bytes.extend_from_slice(&filter.encode()?);
         }
 
         if let Some(compressed_size) = self.compressed_size {
-            bytes.extend_from_slice(&VarLengthInt(compressed_size).encoding());
+            bytes.extend_from_slice(&VarLengthInt(compressed_size).encode()?);
         }
 
         if let Some(uncompressed_size) = self.uncompressed_size {
-            bytes.extend_from_slice(&VarLengthInt(uncompressed_size).encoding());
+            bytes.extend_from_slice(&VarLengthInt(uncompressed_size).encode()?);
         }
 
         let header_size = bytes.len();
@@ -39,18 +37,20 @@ impl Encode for BlockHeader {
         crc32.process_words(&bytes);
         bytes.extend_from_slice(&crc32.result().to_le_bytes());
 
-        bytes
+        Ok(bytes)
     }
 }
 
 impl Decode for BlockHeader {
-    fn decode<R: Read>(mut src: &mut R) -> Result<Self, DecodeError> {
-        let mut src = RecordedReader::new(&mut src);
+    fn decode<R: BufRead>(mut src: &mut R) -> DecodeResult<Self> {
+        let mut src = CheckedReader::new(&mut src);
 
-        let err = Err(DecodeError::BlockError(BlockDecodeError::InvalidHeader));
+        let err = Err(DecodeError::BlockDecodeError(
+            BlockDecodeError::InvalidHeader,
+        ));
 
         let read_bytes =
-            |n: usize, src: &mut RecordedReader<&mut R>| -> Result<Vec<u8>, DecodeError> {
+            |n: usize, src: &mut CheckedReader<&mut R>| -> Result<Vec<u8>, DecodeError> {
                 let mut buf = vec![0u8; n];
                 src.read_exact(&mut buf)?;
                 Ok(buf)
@@ -91,7 +91,7 @@ impl Decode for BlockHeader {
             filters.push(filter);
         }
 
-        let padding_size = header_size - src.recording.len() - 4;
+        let padding_size = header_size - src.buffer().len() - 4;
         if read_bytes(padding_size, &mut src)?.iter().any(|&b| b != 0) {
             return err;
         }

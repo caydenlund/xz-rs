@@ -1,9 +1,8 @@
-use crate::{
-    decode::{Decode, DecodeError},
-    encode::Encode,
-};
+use std::io::BufRead;
 
-use super::{BlockDecodeError, VarLengthInt};
+use super::BlockDecodeError;
+use crate::error::{DecodeError, DecodeResult, EncodeResult};
+use crate::util::{Decode, Encode, VarLengthInt};
 
 #[derive(Debug, Clone)]
 pub struct Filter {
@@ -12,20 +11,22 @@ pub struct Filter {
 }
 
 impl Encode for Filter {
-    fn encoding(&self) -> Vec<u8> {
+    fn encode(&self) -> EncodeResult<Vec<u8>> {
         let mut bytes = Vec::new();
 
-        bytes.extend_from_slice(&VarLengthInt(self.id).encoding());
-        bytes.extend_from_slice(&VarLengthInt(self.properties.len() as u64).encoding());
+        bytes.extend_from_slice(&VarLengthInt(self.id).encode()?);
+        bytes.extend_from_slice(&VarLengthInt(self.properties.len() as u64).encode()?);
         bytes.extend_from_slice(&self.properties);
 
-        bytes
+        Ok(bytes)
     }
 }
 
 impl Decode for Filter {
-    fn decode<R: std::io::Read>(src: &mut R) -> Result<Self, DecodeError> {
-        let err = Err(DecodeError::BlockError(BlockDecodeError::InvalidHeader));
+    fn decode<R: BufRead>(src: &mut R) -> DecodeResult<Self> {
+        let err = Err(DecodeError::BlockDecodeError(
+            BlockDecodeError::InvalidHeader,
+        ));
         let id = VarLengthInt::decode(src)?.0;
 
         if id > 0x4000_0000_0000_0000 {

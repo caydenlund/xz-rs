@@ -1,5 +1,10 @@
-use crate::decode::{Decode, DecodeError};
-use crate::encode::Encode;
+use std::io::BufRead;
+
+use crate::{
+    checksum::{Checksum, Crc32},
+    error::{DecodeError, DecodeResult, EncodeResult},
+    util::{Decode, Encode},
+};
 
 use super::{StreamDecodeError, StreamFlags};
 
@@ -12,31 +17,34 @@ pub struct StreamHeader {
 }
 
 impl Encode for StreamHeader {
-    fn encoding(&self) -> Vec<u8> {
-        MAGIC_BYTES
+    fn encode(&self) -> EncodeResult<Vec<u8>> {
+        Ok(MAGIC_BYTES
             .into_iter()
-            .chain(self.flags.encoding())
-            .chain(self.flags.crc_32().to_le_bytes())
-            .collect()
+            .chain(self.flags.encode()?)
+            .collect())
     }
 }
 
 impl Decode for StreamHeader {
-    fn decode<R: std::io::Read>(src: &mut R) -> Result<Self, DecodeError> {
-        let err = |e| Err(DecodeError::from(e));
-        use StreamDecodeError::*;
+    fn decode<R: BufRead>(src: &mut R) -> DecodeResult<Self> {
+        let err = Err(DecodeError::StreamDecodeError(
+            StreamDecodeError::InvalidHeader,
+        ));
 
         let mut bytes = [0u8; 12];
         src.read_exact(&mut bytes)?;
 
         if bytes[..MAGIC_BYTES_LEN] != MAGIC_BYTES {
-            return err(InvalidHeader);
+            return err;
         }
 
-        let flags = StreamFlags::try_from(&[bytes[MAGIC_BYTES_LEN], bytes[MAGIC_BYTES_LEN + 1]])?;
+        let flag_bytes = [bytes[MAGIC_BYTES_LEN], bytes[MAGIC_BYTES_LEN + 1]];
+        let flags = StreamFlags::try_from(&flag_bytes)?;
 
-        if flags.crc_32().to_le_bytes() != bytes[8..] {
-            return err(InvalidHeader);
+        let mut crc32 = Crc32::new();
+        crc32.process_words(&flag_bytes);
+        if crc32.result().to_le_bytes() != bytes[8..] {
+            return err;
         }
 
         Ok(Self { flags })
