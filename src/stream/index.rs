@@ -20,7 +20,7 @@ impl Decode for BlockIndex {
         let err = Err(DecodeError::StreamDecodeError(
             StreamDecodeError::InvalidIndex,
         ));
-        let mut src = CheckedReader::new(src);
+        let mut src = CheckedReader::new(src, Crc32::new());
 
         let mut bytes = [0u8];
         src.read_exact(&mut bytes)?;
@@ -42,7 +42,7 @@ impl Decode for BlockIndex {
             });
         }
 
-        let padding_size = (4 - ((src.buffer().len() + 4) % 4)) % 4;
+        let padding_size = (4 - (src.len() % 4)) % 4;
         let mut padding = vec![0u8; padding_size];
         src.read_exact(&mut padding)?;
 
@@ -50,12 +50,11 @@ impl Decode for BlockIndex {
             return err;
         }
 
-        let actual_crc32 = src.crc32();
-        let mut crc32_bytes = [0u8; 4];
-        src.read_exact(&mut crc32_bytes)?;
-        let expected_crc32 = u32::from_le_bytes(crc32_bytes);
+        let actual_crc32 = src.checksum();
+        let mut expected_crc32 = [0u8; 4];
+        src.read_exact(&mut expected_crc32)?;
 
-        if actual_crc32 != expected_crc32 {
+        if actual_crc32.to_le_bytes() != expected_crc32 {
             return err;
         }
 
@@ -78,7 +77,7 @@ impl Encode for BlockIndex {
         bytes.extend_from_slice(&vec![0u8; padding_needed]);
 
         let mut crc32 = Crc32::new();
-        crc32.process_words(&bytes);
+        crc32.process_bytes(&bytes);
         bytes.extend_from_slice(&crc32.result().to_le_bytes());
 
         Ok(bytes)

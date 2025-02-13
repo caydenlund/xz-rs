@@ -1,73 +1,48 @@
-use crate::checksum::{Checksum, Crc32};
+use crate::checksum::Checksum;
 use std::io::{BufRead, Read};
 
 #[derive(Debug)]
-pub struct CheckedReader<'r, R: BufRead> {
+pub struct CheckedReader<'r, R: BufRead, C: Checksum> {
     pub inner: &'r mut R,
-    buffer: Vec<u8>,
-    start: usize,
-    end: usize,
+    checksum: C,
+    read: usize,
 }
 
-impl<'r, R: BufRead> CheckedReader<'r, R> {
-    pub fn new(inner: &'r mut R) -> Self {
+impl<'r, R: BufRead, C: Checksum> CheckedReader<'r, R, C> {
+    pub fn new(inner: &'r mut R, checksum: C) -> Self {
         Self {
             inner,
-            buffer: Vec::new(),
-            start: 0,
-            end: 0,
+            checksum,
+            read: 0,
         }
     }
 
-    pub fn buffer(&self) -> &[u8] {
-        &self.buffer[self.start..self.end]
+    pub fn checksum(&self) -> C::Result {
+        self.checksum.result()
     }
 
-    pub fn whole_buffer(&self) -> &[u8] {
-        &self.buffer[..self.end]
-    }
-
-    pub fn crc32(&self) -> u32 {
-        let mut crc32 = Crc32::new();
-        crc32.process_words(self.whole_buffer());
-        crc32.result()
+    pub fn len(&self) -> usize {
+        self.read
     }
 }
 
-impl<R: BufRead> Read for CheckedReader<'_, R> {
+impl<R: BufRead, C: Checksum> Read for CheckedReader<'_, R, C> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.start >= self.end {
-            self.fill_buf()?;
-            if self.start >= self.end {
-                return Ok(0);
-            }
-        }
-
-        let len = buf.len().min(self.end - self.start);
-        buf[..len].copy_from_slice(&self.buffer[self.start..(self.start + len)]);
-        self.start += len;
-        Ok(len)
+        let bytes_read = self.inner.read(buf)?;
+        self.checksum.process_bytes(&buf[..bytes_read]);
+        self.read += bytes_read;
+        Ok(bytes_read)
     }
 }
 
-impl<R: BufRead> BufRead for CheckedReader<'_, R> {
+impl<R: BufRead, C: Checksum> BufRead for CheckedReader<'_, R, C> {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        if self.start >= self.end {
-            self.start = 0;
-            self.end = 0;
-        }
-
-        if self.buffer.capacity() == 0 {
-            self.buffer.reserve(8192);
-        }
-
-        let read = self.inner.read(&mut self.buffer[self.end..])?;
-        self.end += read;
-
-        Ok(&self.buffer[self.start..self.end])
+        self.inner.fill_buf()
     }
 
     fn consume(&mut self, amt: usize) {
+        let data = self.inner.fill_buf().unwrap_or(&[]);
+        self.checksum.process_bytes(&data[..amt.min(data.len())]);
         self.inner.consume(amt);
     }
 }

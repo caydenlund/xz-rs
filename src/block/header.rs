@@ -34,7 +34,7 @@ impl Encode for BlockHeader {
         bytes.extend_from_slice(&vec![0u8; padding_needed]);
 
         let mut crc32 = Crc32::new();
-        crc32.process_words(&bytes);
+        crc32.process_bytes(&bytes);
         bytes.extend_from_slice(&crc32.result().to_le_bytes());
 
         Ok(bytes)
@@ -43,14 +43,14 @@ impl Encode for BlockHeader {
 
 impl Decode for BlockHeader {
     fn decode<R: BufRead>(mut src: &mut R) -> DecodeResult<Self> {
-        let mut src = CheckedReader::new(&mut src);
+        let mut src = CheckedReader::new(&mut src, Crc32::new());
 
         let err = Err(DecodeError::BlockDecodeError(
             BlockDecodeError::InvalidHeader,
         ));
 
         let read_bytes =
-            |n: usize, src: &mut CheckedReader<&mut R>| -> Result<Vec<u8>, DecodeError> {
+            |n: usize, src: &mut CheckedReader<&mut R, Crc32>| -> Result<Vec<u8>, DecodeError> {
                 let mut buf = vec![0u8; n];
                 src.read_exact(&mut buf)?;
                 Ok(buf)
@@ -91,16 +91,15 @@ impl Decode for BlockHeader {
             filters.push(filter);
         }
 
-        let padding_size = header_size - src.buffer().len() - 4;
+        let padding_size = header_size - src.len() - 4;
         if read_bytes(padding_size, &mut src)?.iter().any(|&b| b != 0) {
             return err;
         }
 
-        let actual_crc32 = src.crc32();
-        let mut crc32_bytes = [0u8; 4];
-        src.read_exact(&mut crc32_bytes)?;
-        let expected_crc32 = u32::from_le_bytes(crc32_bytes);
-        if actual_crc32 != expected_crc32 {
+        let actual_crc32 = src.checksum();
+        let mut expected_crc32 = [0u8; 4];
+        src.read_exact(&mut expected_crc32)?;
+        if actual_crc32.to_le_bytes() != expected_crc32 {
             return err;
         }
 

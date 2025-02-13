@@ -42,7 +42,7 @@ impl Decode for StreamHeader {
         let flags = StreamFlags::try_from(&flag_bytes)?;
 
         let mut crc32 = Crc32::new();
-        crc32.process_words(&flag_bytes);
+        crc32.process_bytes(&flag_bytes);
         if crc32.result().to_le_bytes() != bytes[8..] {
             return err;
         }

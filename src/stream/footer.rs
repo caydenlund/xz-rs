@@ -18,10 +18,10 @@ impl Encode for StreamFooter {
         let mut crc32 = Crc32::new();
 
         let backward_size = self.backward_size.to_le_bytes();
-        crc32.process_words(&backward_size);
+        crc32.process_bytes(&backward_size);
 
         let flags = self.flags.encode()?;
-        crc32.process_words(&flags);
+        crc32.process_bytes(&flags);
 
         let crc32 = crc32.result().to_le_bytes();
 
@@ -51,7 +51,7 @@ impl Decode for StreamFooter {
         let flags = StreamFlags::try_from(&[bytes[8], bytes[9]])?;
 
         let mut crc32 = Crc32::new();
-        crc32.process_words(&bytes[4..10]);
+        crc32.process_bytes(&bytes[4..10]);
         if bytes[..4] != crc32.result().to_le_bytes() {
             return err;
         }

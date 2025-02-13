@@ -22,7 +22,7 @@ impl Encode for StreamFlags {
             StreamFlags::Sha256 => [0, 0xA],
         };
         let mut crc32 = Crc32::new();
-        crc32.process_words(&flag_enc);
+        crc32.process_bytes(&flag_enc);
         Ok(flag_enc
             .into_iter()
             .chain(crc32.result().to_le_bytes())

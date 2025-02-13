@@ -36,12 +36,10 @@ impl Default for Crc32 {
 }
 
 impl Checksum for Crc32 {
-    type Word = u8;
-
     type Result = u32;
 
-    fn process_next_word(&mut self, word: &Self::Word) {
-        self.0 = CRC32_TABLE[((self.0 ^ u32::from(*word)) & 0xFF) as usize] ^ (self.0 >> 8);
+    fn process_next_byte(&mut self, byte: u8) {
+        self.0 = CRC32_TABLE[((self.0 ^ u32::from(byte)) & 0xFF) as usize] ^ (self.0 >> 8);
     }
 
     fn result(&self) -> Self::Result {

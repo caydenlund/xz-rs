@@ -36,12 +36,10 @@ impl Default for Crc64 {
 }
 
 impl Checksum for Crc64 {
-    type Word = u8;
-
     type Result = u64;
 
-    fn process_next_word(&mut self, word: &Self::Word) {
-        self.0 = CRC64_TABLE[((self.0 ^ u64::from(*word)) & 0xFF) as usize] ^ (self.0 >> 8);
+    fn process_next_byte(&mut self, word: u8) {
+        self.0 = CRC64_TABLE[((self.0 ^ u64::from(word)) & 0xFF) as usize] ^ (self.0 >> 8);
     }
 
     fn result(&self) -> Self::Result {
