@@ -1,6 +1,6 @@
 use crate::block::BlockDecodeError;
+use crate::lzma2::Lzma2DecodeError;
 use crate::stream::StreamDecodeError;
-use std::io::Error;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -12,10 +12,13 @@ pub enum DecodeError {
     BlockDecodeError(#[from] BlockDecodeError),
 
     #[error("I/O error: {0}")]
-    IoError(#[from] Error),
+    IoError(#[from] std::io::Error),
 
     #[error("VLI overflow")]
     VliOverflowError,
+
+    #[error("LZMA2 error: {0}")]
+    LzmaError(#[from] Lzma2DecodeError),
 }
 
 pub type DecodeResult<T> = Result<T, DecodeError>;

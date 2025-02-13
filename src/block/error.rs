@@ -13,4 +13,7 @@ pub enum BlockDecodeError {
 
     #[error("Invalid variable-length integer")]
     InvalidVarInt,
+
+    #[error("Invalid compressed data")]
+    InvalidData,
 }
