@@ -1,3 +1,5 @@
+mod error;
+pub use error::*;
 mod flags;
 pub use flags::*;
 mod footer;

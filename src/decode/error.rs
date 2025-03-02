@@ -1,17 +1,12 @@
-use std::error::Error;
-use std::fmt::Display;
+use crate::stream::StreamDecodeError;
 
-#[derive(Debug, Clone)]
+use thiserror::Error;
+
+#[derive(Error, Debug)]
 pub enum DecodeError {
-    InvalidHeader,
-    InvalidFooter,
-    ReservedStreamFlags,
-}
+    #[error("Invalid stream: {0}")]
+    StreamError(#[from] StreamDecodeError),
 
-impl Display for DecodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
+    #[error("Error reading data: {0}")]
+    ReadError(#[from] std::io::Error),
 }
-
-impl Error for DecodeError {}

@@ -10,3 +10,6 @@ documentation = "https://docs.rs/xz-rs"
 keywords = ["compression", "decompression", "lzma", "xz"]
 categories = ["compression"]
 authors = ["Cayden Lund <caydenlund@gmail.com>"]
+
+[dependencies]
+thiserror = "2.0"
