@@ -1,9 +1,16 @@
 mod error;
 pub use error::*;
 
+use crate::stream::{StreamDecodeError, StreamFooter, StreamHeader};
+use std::{fmt::Write, io::Read};
+
 pub trait Decode
 where
     Self: Sized,
 {
-    fn decode(src: &[u8]) -> Result<(Self, usize), DecodeError>;
+    fn decode<R: Read>(src: &mut R) -> Result<Self, DecodeError>;
+}
+
+pub fn decode_xz<R: Read, W: Write>(mut src: R, dst: &mut W) -> Result<(), DecodeError> {
+    todo!()
 }

@@ -22,26 +22,23 @@ impl Encode for StreamHeader {
 }
 
 impl Decode for StreamHeader {
-    fn decode(src: &[u8]) -> std::result::Result<(StreamHeader, usize), DecodeError> {
+    fn decode<R: std::io::Read>(src: &mut R) -> Result<Self, DecodeError> {
         let err = |e| Err(DecodeError::from(e));
         use StreamDecodeError::*;
 
-        if src.len() < 12 {
+        let mut bytes = [0u8; 12];
+        src.read_exact(&mut bytes)?;
+
+        if bytes[..MAGIC_BYTES_LEN] != MAGIC_BYTES {
             return err(InvalidHeader);
         }
 
-        if src[..MAGIC_BYTES_LEN] != MAGIC_BYTES {
+        let flags = StreamFlags::try_from(&[bytes[MAGIC_BYTES_LEN], bytes[MAGIC_BYTES_LEN + 1]])?;
+
+        if flags.crc_32().to_le_bytes() != bytes[8..] {
             return err(InvalidHeader);
         }
 
-        let (flags, offset) = StreamFlags::decode(&src[MAGIC_BYTES_LEN..])?;
-        let crc_index = MAGIC_BYTES_LEN + offset;
-
-        let end_index = crc_index + 4;
-        if flags.crc_32().to_le_bytes() != src[crc_index..end_index] {
-            return err(InvalidHeader);
-        }
-
-        Ok((Self { flags }, end_index))
+        Ok(Self { flags })
     }
 }

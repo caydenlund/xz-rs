@@ -6,7 +6,7 @@ use crate::encode::Encode;
 
 use super::{StreamDecodeError, StreamFlagsError};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamFlags {
     // 0x00: 0 bytes
     None,
@@ -48,21 +48,31 @@ impl Encode for StreamFlags {
     }
 }
 
-impl Decode for StreamFlags {
-    fn decode(src: &[u8]) -> Result<(StreamFlags, usize), DecodeError> {
+impl TryFrom<&[u8; 2]> for StreamFlags {
+    type Error = DecodeError;
+
+    fn try_from(bytes: &[u8; 2]) -> Result<Self, Self::Error> {
         let err = |e| Err(DecodeError::from(StreamDecodeError::from(e)));
         use StreamFlagsError::*;
 
-        if src.len() < 2 || src[0] != 0 {
+        if bytes[0] != 0 {
             return err(InvalidStreamFlags);
         }
 
-        match src[1] {
-            0x0 => Ok((StreamFlags::None, 2)),
-            0x1 => Ok((StreamFlags::Crc32, 2)),
-            0x4 => Ok((StreamFlags::Crc64, 2)),
-            0xA => Ok((StreamFlags::Sha256, 2)),
+        match bytes[1] {
+            0x0 => Ok(StreamFlags::None),
+            0x1 => Ok(StreamFlags::Crc32),
+            0x4 => Ok(StreamFlags::Crc64),
+            0xA => Ok(StreamFlags::Sha256),
             _ => err(ReservedStreamFlags),
         }
+    }
+}
+
+impl Decode for StreamFlags {
+    fn decode<R: std::io::Read>(src: &mut R) -> Result<Self, DecodeError> {
+        let mut bytes = [0u8; 2];
+        src.read_exact(&mut bytes)?;
+        Self::try_from(&bytes)
     }
 }
