@@ -1,8 +1,9 @@
+use logomotion::log;
 use std::io::Write;
 
 pub(crate) struct Dict<W: Write> {
     output: W,
-    buf: Vec<u8>,
+    pub(crate) buf: Vec<u8>,
 }
 
 impl<W: Write> Dict<W> {
@@ -22,15 +23,27 @@ impl<W: Write> Dict<W> {
     }
 
     pub(crate) fn last(&self) -> Option<u8> {
-        self.buf.last().map(|b| *b)
+        self.buf.last().copied()
     }
 
     pub(crate) fn last_n(&self, n: usize) -> Option<u8> {
-        self.buf.get(self.buf.len() - n).map(|b| *b)
+        self.buf.get(self.buf.len() - n).copied()
     }
 
     pub(crate) fn extend(&mut self, bytes: &[u8]) {
         self.buf.extend_from_slice(bytes);
+        log!(
+            "\x1b[32mdecoded byte{}: [{}] `{}`",
+            if bytes.len() == 1 { "" } else { "s" },
+            bytes
+                .iter()
+                .map(|b| format!("0x{b:02X}"))
+                .collect::<Vec<_>>()
+                .join(", "),
+            String::from_utf8(bytes.to_vec())
+                .unwrap_or_default()
+                .replace("\n", "\\n")
+        );
     }
 
     pub(crate) fn flush(&mut self) -> std::io::Result<()> {
@@ -41,15 +54,21 @@ impl<W: Write> Dict<W> {
 
     pub(crate) fn push(&mut self, byte: u8) {
         self.buf.push(byte);
+        log!(
+            "\x1b[32mdecoded byte: [0x{byte:02X}] `{}`",
+            String::from_utf8(vec![byte])
+                .unwrap_or_default()
+                .replace("\n", "\\n")
+        );
     }
 
     pub(crate) fn repeat(&mut self, mut len: usize, mut dist: usize) {
-        dist = dist.max(self.buf.len());
+        dist = dist.min(self.buf.len());
         while len > 0 {
             let len_in_buf = len.min(dist);
             let bytes =
                 self.buf[(self.buf.len() - dist)..(self.buf.len() - dist + len_in_buf)].to_vec();
-            self.buf.extend_from_slice(&bytes);
+            self.extend(&bytes);
             len -= len_in_buf;
         }
     }

@@ -5,6 +5,7 @@ use lzma2_decoder::Lzma2Decoder;
 use crate::{error::DecodeResult, util::InputRead};
 
 mod dict;
+mod len_decoder;
 mod lzma2_decoder;
 mod lzma_decoder;
 mod lzma_state;

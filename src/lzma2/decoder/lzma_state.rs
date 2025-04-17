@@ -52,6 +52,14 @@ impl LzmaState {
             Self::NonlitRep
         };
     }
+
+    pub(crate) fn state_match(&mut self) {
+        *self = if self.is_literal() {
+            Self::LitMatch
+        } else {
+            Self::NonlitMatch
+        };
+    }
 }
 
 impl From<u8> for LzmaState {

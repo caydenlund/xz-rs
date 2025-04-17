@@ -7,6 +7,7 @@ use crate::lzma2::Lzma2DecodeError;
 use crate::util::InputRead;
 
 use super::dict::Dict;
+use super::len_decoder::LenDecoder;
 use super::lzma_state::LzmaState;
 use super::range_decoder::RangeDecoder;
 
@@ -40,6 +41,18 @@ pub(crate) struct LzmaDecoder {
     /// Otherwise, decode the length with `self.rep_len_decoder`.
     is_rep0_long: [[u16; Self::POS_STATES_MAX]; LzmaState::NUM_STATES],
 
+    /// Probability trees for the highest 2 bits of the match distance.
+    /// Separate tree for match lengths of 2, 3, 4, and [5, 273].
+    dist_slot: [[u16; Self::DIST_SLOTS]; Self::DIST_STATES],
+
+    /// Probability trees for additional bits for match distance
+    /// when the distance is in the range [4, 127].
+    dist_special: [u16; 128 - Self::DIST_MODEL_END],
+
+    /// Probability trees for the lowest 4 bits for match distance
+    /// when the distance >= 128.
+    dist_align: [u16; 1 << Self::ALIGN_BITS],
+
     /// Probabilities of literals.
     literal: [[u16; Self::LITERAL_CODER_SIZE]; Self::LITERAL_CODERS_MAX],
 
@@ -48,19 +61,33 @@ pub(crate) struct LzmaDecoder {
 
     /// The most-recently seen symbols.
     state: LzmaState,
+
+    /// Length of a normal match.
+    match_len_dec: LenDecoder,
+
+    /// Length of a repeated match.
+    rep_len_dec: LenDecoder,
 }
 
 impl LzmaDecoder {
     /// The maximum number of position states, depending on the number of pb bits.
     /// (The maximum number of pb bits is 4.)
-    const POS_STATES_MAX: usize = 1 << 4;
+    pub(crate) const POS_STATES_MAX: usize = 1 << 4;
 
     /// The default probability of a bit being 0 or 1.
     /// (I.e., exactly in the middle of the probability range.)
-    const DEFAULT_PROB: u16 = 0x0400;
+    pub(crate) const DEFAULT_PROB: u16 = 0x0400;
 
     /// The maximum number of literal coders
     const LITERAL_CODERS_MAX: usize = (1 << 4);
+
+    const DIST_STATES: usize = 4;
+    const DIST_SLOTS: usize = 64;
+    const DIST_MODEL_START: usize = 4;
+    const DIST_MODEL_END: usize = 14;
+
+    const MATCH_LEN_MIN: usize = 2;
+    const ALIGN_BITS: usize = 4;
 
     /// Each literal coder is divided into three ranges:
     ///   - 0x001..=0x0FF: Without match byte
@@ -82,9 +109,14 @@ impl LzmaDecoder {
             is_rep1: [Self::DEFAULT_PROB; LzmaState::NUM_STATES],
             is_rep2: [Self::DEFAULT_PROB; LzmaState::NUM_STATES],
             is_rep0_long: [[Self::DEFAULT_PROB; Self::POS_STATES_MAX]; LzmaState::NUM_STATES],
+            dist_slot: [[Self::DEFAULT_PROB; Self::DIST_SLOTS]; Self::DIST_STATES],
+            dist_special: [Self::DEFAULT_PROB; 128 - Self::DIST_MODEL_END],
+            dist_align: [Self::DEFAULT_PROB; 1 << Self::ALIGN_BITS],
             literal: [[Self::DEFAULT_PROB; Self::LITERAL_CODER_SIZE]; Self::LITERAL_CODERS_MAX],
             rep: [0; 4],
             state: LzmaState::default(),
+            match_len_dec: LenDecoder::new(),
+            rep_len_dec: LenDecoder::new(),
         }
     }
 
@@ -99,10 +131,16 @@ impl LzmaDecoder {
         self.is_rep2.fill(Self::DEFAULT_PROB);
         self.is_rep0_long
             .fill([Self::DEFAULT_PROB; Self::POS_STATES_MAX]);
+        self.dist_slot.fill([Self::DEFAULT_PROB; Self::DIST_SLOTS]);
+        self.dist_special.fill(Self::DEFAULT_PROB);
+        self.dist_align.fill(Self::DEFAULT_PROB);
         self.literal
             .fill([Self::DEFAULT_PROB; Self::LITERAL_CODER_SIZE]);
         self.rep.fill(0);
         self.state = LzmaState::default();
+
+        self.match_len_dec.reset();
+        self.rep_len_dec.reset();
         // TODO: Don't forget to reset props here as they're added!
     }
 
@@ -198,13 +236,33 @@ impl LzmaDecoder {
 
                 log!("performing a long rep");
                 self.state.state_long_rep();
+
+                let len = self.rep_len_dec.decode(input, rc, pos_state)?;
+                log!("len: {len}");
+
                 todo!();
             } else {
                 log!("distance is not a repeat");
-                todo!();
-            }
 
-            todo!();
+                (0..3).rev().for_each(|i| self.rep[i + 1] = self.rep[i]);
+
+                let len = self.match_len_dec.decode(input, rc, pos_state)?;
+                log!("len: {len}");
+
+                self.state.state_match();
+
+                let dist = self.decode_distance(input, rc, len)?;
+                log!("dist: {dist}");
+                dict.repeat(len, dist + 1);
+
+                log!(
+                    "dict: `{}` (len: {})",
+                    String::from_utf8(dict.buf.clone())
+                        .unwrap_or_default()
+                        .replace("\n", "\\n"),
+                    dict.len()
+                );
+            }
         } else {
             log!("decoding literal");
 
@@ -224,6 +282,7 @@ impl LzmaDecoder {
                 while result < 0x100 {
                     result = (result << 1)
                         + (rc.decode_bit(input, &mut literal_probs[result])? as usize);
+                    log!("partial result: 0x{result:02X}");
                 }
                 result as u8
             } else {
@@ -243,19 +302,57 @@ impl LzmaDecoder {
                         break;
                     }
                 }
+
+                while result < 0x100 {
+                    result = (result << 1)
+                        ^ (rc.decode_bit(input, &mut literal_probs[result])? as usize);
+                }
+
                 result as u8
             };
-
-            log!(
-                "decoded literal: 0x{literal:02X} ('{}')",
-                String::from(literal as char).replace("\n", "\\n")
-            );
 
             dict.push(literal);
             self.state.state_literal();
         }
 
         Ok(())
+    }
+
+    fn decode_distance<R: InputRead>(
+        &mut self,
+        input: &mut R,
+        rc: &mut RangeDecoder,
+        len: usize,
+    ) -> DecodeResult<usize> {
+        let _ctx = func!("LzmaDecoder::decode_distance(input, rc, len: {len})");
+
+        let dist_state = if len < Self::DIST_STATES + Self::MATCH_LEN_MIN {
+            len - Self::MATCH_LEN_MIN
+        } else {
+            Self::DIST_STATES - 1
+        };
+        let probs = &mut self.dist_slot[dist_state];
+        let dist_slot = rc.bit_tree(input, probs, Self::DIST_SLOTS)? - Self::DIST_SLOTS;
+
+        let dist = if dist_slot < Self::DIST_MODEL_START {
+            dist_slot
+        } else {
+            let limit = (dist_slot >> 1) - 1;
+            let mut rep0 = 2 + (dist_slot & 1);
+
+            if dist_slot < Self::DIST_MODEL_END {
+                rep0 <<= limit;
+                let probs = &mut self.dist_special[(rep0 - dist_slot - 1)..];
+                rc.bit_tree_rev(input, probs, rep0, limit)?
+            } else {
+                rep0 = rc.direct(input, rep0 as u32, limit - Self::ALIGN_BITS)? as usize;
+                rep0 <<= Self::ALIGN_BITS;
+                rc.bit_tree_rev(input, &mut self.dist_align, rep0, Self::ALIGN_BITS)?
+            }
+        };
+        self.rep[0] = dist;
+
+        Ok(dist)
     }
 }
 

@@ -76,4 +76,61 @@ impl RangeDecoder {
         log!("code: 0x{:08X}", self.code);
         Ok(())
     }
+
+    pub(crate) fn bit_tree<R: InputRead>(
+        &mut self,
+        input: &mut R,
+        probs: &mut [u16],
+        limit: usize,
+    ) -> DecodeResult<usize> {
+        let _ctx = func!("RangeCoder::bit_tree(input, probs, limit: 0x{limit:08X} ({limit}))");
+
+        let mut symbol = 1;
+        while symbol < limit {
+            let bit = self.decode_bit(input, &mut probs[symbol])?;
+            symbol = (symbol << 1) + bit as usize;
+        }
+        log!("result: 0x{symbol:08X} ({symbol})");
+        Ok(symbol)
+    }
+
+    pub(crate) fn bit_tree_rev<R: InputRead>(
+        &mut self,
+        input: &mut R,
+        probs: &mut [u16],
+        mut initial: usize,
+        limit: usize,
+    ) -> DecodeResult<usize> {
+        let _ctx = func!("RangeDecoder::bit_tree_rev(input, probs, initial: 0x{initial:X} ({initial}), limit: 0x{limit:X} ({limit}))");
+
+        let mut symbol = 1;
+
+        for i in 0..limit.max(1) {
+            let bit = self.decode_bit(input, &mut probs[symbol])?;
+            if bit {
+                initial += 1 << i;
+            }
+            symbol = (symbol << 1) + bit as usize;
+        }
+
+        Ok(initial)
+    }
+
+    pub(crate) fn direct<R: InputRead>(
+        &mut self,
+        input: &mut R,
+        mut initial: u32,
+        limit: usize,
+    ) -> DecodeResult<u32> {
+        let _ctx = func!("RangeDecoder::direct(input, initial: 0x{initial:X} ({initial}), limit: 0x{limit:X} ({limit}))");
+        for _ in limit..0 {
+            self.normalize(input)?;
+            self.range >>= 1;
+            self.code -= self.range;
+            let mask = 0 - (self.code >> 31);
+            self.code += self.range & mask;
+            initial = (initial << 1) + (mask + 1);
+        }
+        Ok(initial)
+    }
 }
