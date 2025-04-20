@@ -54,7 +54,18 @@ impl<W: Write> Lzma2Decoder<W> {
     ) -> DecodeResult<()> {
         let _ctx = func!("Lzma2Decoder::decode_uncompressed(input, reset_dict: {reset_dict})");
 
-        todo!(); //
+        let uncompressed_size = input.read_be_u16()? as usize + 1;
+        log!("uncompressed size: 0x{uncompressed_size:X} ({uncompressed_size})");
+
+        if reset_dict {
+            self.dict.flush()?;
+        }
+
+        let mut buf = vec![0; uncompressed_size];
+        input.read_exact(&mut buf)?;
+        self.dict.extend(&buf);
+
+        Ok(())
     }
 
     fn decode_compressed<R: InputRead>(

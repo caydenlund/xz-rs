@@ -344,7 +344,7 @@ impl LzmaDecoder {
 
             if dist_slot < Self::DIST_MODEL_END {
                 rep0 <<= limit;
-                let probs = &mut self.dist_special[(rep0 - dist_slot - 1)..];
+                let probs = &mut self.dist_special[(rep0 - dist_slot)..];
                 rc.bit_tree_rev(input, probs, rep0, limit)?
             } else {
                 rep0 = rc.direct(input, rep0 as u32, limit - Self::ALIGN_BITS)? as usize;
