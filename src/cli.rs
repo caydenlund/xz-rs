@@ -4,9 +4,10 @@ use crate::lzma2::decode_lzma2;
 use crate::stream::{BlockIndex, StreamFooter, StreamHeader};
 use crate::util::Decode;
 use clap::{ArgAction, Parser};
+use std::fs::File;
+use std::io::{self, Seek};
 use std::io::{BufRead, BufReader, Cursor, Read};
 use std::path::PathBuf;
-use std::{fs::File, io};
 
 #[derive(Parser, Debug)]
 #[command(name = "xz")]
@@ -65,25 +66,8 @@ pub struct XzArgs {
     pub verbose: u8,
 }
 
-fn read_file(file: &PathBuf) -> io::Result<Vec<u8>> {
-    if !file.try_exists()? {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("File not found: `{}`", file.to_string_lossy()),
-        ));
-    }
-
-    std::fs::read(file)
-}
-
-pub fn compress_files(files: &[PathBuf]) -> EncodeResult<()> {
-    for file in files {
-        let _contents = read_file(file)?;
-
-        todo!();
-    }
-
-    Ok(())
+pub fn compress_files(_files: &[PathBuf]) -> EncodeResult<()> {
+    todo!()
 }
 
 pub fn decompress_files(files: &[PathBuf]) -> DecodeResult<()> {
@@ -95,81 +79,55 @@ pub fn decompress_files(files: &[PathBuf]) -> DecodeResult<()> {
     for file in files {
         let mut file = BufReader::new(File::open(file).map_err(print_err)?);
 
-        println!("\n==========| Stream Header |==========");
-        let header = StreamHeader::decode(&mut file).map_err(|e| {
+        // The first part of the file is the stream header.
+        // TODO: do CRC32/CRC64/SHA256 verification based on the header.
+        let _header = StreamHeader::decode(&mut file).map_err(|e| {
             eprintln!("Error: {e}");
             io::Error::from(io::ErrorKind::InvalidData)
         })?;
 
-        println!("Valid header: {:?}", header);
-
+        // Then, the file is made up of a series of blocks.
+        // We don't know how many there are up front,
+        // but a block header starts with a non-zero size byte
+        // and the stream index (first thing after the last block)
+        // starts with a 0 byte.
         while file.fill_buf()?[0] != 0x0 {
-            println!("\n==========| Block |==========");
+            // Decode the block header.
+            // TODO: use this to determine what & how to decode.
+            let _header = BlockHeader::decode(&mut file)?;
 
-            let header = BlockHeader::decode(&mut file)?;
-            println!("Block header:");
-            println!("    Filters:");
-            for (i, f) in header.filters.iter().enumerate() {
-                println!("        {i}:  {:?}", f);
-            }
-
-            println!(
-                "    Compressed size: {}",
-                header
-                    .compressed_size
-                    .map(|s| s.to_string())
-                    .unwrap_or("not specified".into())
-            );
-            println!(
-                "    Uncompressed size: {}",
-                header
-                    .uncompressed_size
-                    .map(|s| s.to_string())
-                    .unwrap_or("not specified".into())
-            );
-
-            // TODO: Don't assume that the compressed size is specified.
-            let mut compressed_size = header.compressed_size.unwrap() as usize;
-            compressed_size = (compressed_size + 3) & !3; // pad to multiple of 4 bytes
-            let mut block_body = vec![0u8; compressed_size];
-            file.read_exact(&mut block_body)?;
-            println!("\nBody size: {compressed_size} bytes");
-            (0..block_body.len()).for_each(|i| {
-                if i % 8 == 0 {
-                    if i > 0 {
-                        println!();
-                    }
-                    print!("    [{i:04x}]  ");
-                } else if i % 8 == 4 {
-                    print!(" ");
-                }
-                print!("{:02x} ", block_body[i]);
-            });
-            println!();
-
+            // Decode the block body.
             let mut decoded = Vec::new();
-            let mut block_reader = Cursor::new(&block_body);
-            decode_lzma2(&mut block_reader, &mut decoded)?;
-            println!("Decoded: {decoded:?}");
+            decode_lzma2(&mut file, &mut decoded)?;
+            println!(
+                "decoded string: `{}`",
+                String::from_utf8(decoded)
+                    .unwrap_or("[error]".into())
+                    .replace("\n", "\\n")
+            );
+
+            // Read padding bytes for 4-byte alignment.
+            {
+                let padding = (4 - (file.stream_position()? % 4)) % 4;
+                let mut bytes = vec![0; padding as usize];
+                file.read_exact(&mut bytes)?;
+            }
         }
 
-        println!("\n==========| Index |==========");
-
-        let index = BlockIndex::decode(&mut file).map_err(|e| {
+        // Decode the stream index.
+        // TODO: use this to verify the validity of the file.
+        let _index = BlockIndex::decode(&mut file).map_err(|e| {
             eprintln!("Error: {e}");
             io::Error::from(io::ErrorKind::InvalidData)
         })?;
 
-        println!("Valid index: {:?}", index);
-
-        println!("\n==========| Stream Footer |==========");
-
-        let footer = StreamFooter::decode(&mut file).map_err(|e| {
+        // Decode the stream footer.
+        let _footer = StreamFooter::decode(&mut file).map_err(|e| {
             eprintln!("Error: {e}");
             io::Error::from(io::ErrorKind::InvalidData)
         })?;
 
-        println!("Valid footer: {:?}", footer);
+        println!("file decoded successfully");
     }
 
     Ok(())
