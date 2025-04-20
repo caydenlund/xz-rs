@@ -2,7 +2,7 @@ use crate::block::BlockHeader;
 use crate::error::{DecodeResult, EncodeResult};
 use crate::lzma2::decode_lzma2;
 use crate::stream::{BlockIndex, StreamFooter, StreamHeader};
-use crate::util::{Decode, LoggingReader};
+use crate::util::Decode;
 use clap::{ArgAction, Parser};
 use std::io::{BufRead, BufReader, Cursor, Read};
 use std::path::PathBuf;
@@ -148,7 +148,7 @@ pub fn decompress_files(files: &[PathBuf]) -> DecodeResult<()> {
             println!();
 
             let mut decoded = Vec::new();
-            let mut block_reader = LoggingReader::new(Cursor::new(&block_body));
+            let mut block_reader = Cursor::new(&block_body);
             decode_lzma2(&mut block_reader, &mut decoded)?;
             println!("Decoded: {decoded:?}");
         }

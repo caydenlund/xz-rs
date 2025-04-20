@@ -1,15 +1,11 @@
-use std::io::Write;
-
-use logomotion::{func, log};
-
-use crate::error::{DecodeError, DecodeResult};
-use crate::lzma2::Lzma2DecodeError;
-use crate::util::InputRead;
-
 use super::dict::Dict;
 use super::len_decoder::LenDecoder;
 use super::lzma_state::LzmaState;
 use super::range_decoder::RangeDecoder;
+use crate::error::{DecodeError, DecodeResult};
+use crate::lzma2::Lzma2DecodeError;
+use crate::util::InputRead;
+use std::io::Write;
 
 pub(crate) struct LzmaDecoder {
     /// Number of literal context bits.
@@ -121,8 +117,6 @@ impl LzmaDecoder {
     }
 
     pub(crate) fn reset_state(&mut self) {
-        let _ctx = func!("LzmaDecoder::reset_state()");
-
         self.is_match
             .fill([Self::DEFAULT_PROB; Self::POS_STATES_MAX]);
         self.is_rep.fill(Self::DEFAULT_PROB);
@@ -145,8 +139,6 @@ impl LzmaDecoder {
     }
 
     pub fn set_props(&mut self, props: u8) -> DecodeResult<()> {
-        let _ctx = func!("LzmaDecoder::set_props(props: 0x{props:02X})");
-
         let err = Err(DecodeError::from(Lzma2DecodeError::InvalidProperties));
 
         if props > (4 * 5 + 4) * 9 + 8 {
@@ -161,8 +153,6 @@ impl LzmaDecoder {
             pb_bits += 1;
         }
 
-        log!("pb bits: {pb_bits}");
-
         self.pb_mask = (1 << pb_bits) - 1;
 
         let mut lp_bits = 0;
@@ -171,13 +161,9 @@ impl LzmaDecoder {
             lp_bits += 1;
         }
 
-        log!("lp bits: {lp_bits}");
-
         if props + lp_bits > 4 {
             return err;
         }
-
-        log!("lc bits: {props}");
 
         self.lc_bits = props;
 
@@ -192,24 +178,16 @@ impl LzmaDecoder {
         rc: &mut RangeDecoder,
         input: &mut R,
     ) -> DecodeResult<()> {
-        let _ctx = func!("LzmaDecoder::decode(dict, rc)");
-
         let pos_state = dict.len() & self.pb_mask;
 
         if rc.decode_bit(input, &mut self.is_match[self.state as usize][pos_state])? {
-            log!("decoding match");
-
             let (len, dist) = if rc.decode_bit(input, &mut self.is_rep[self.state as usize])? {
-                log!("distance is repeated from 1 of the last 4 matches");
-
                 let dist = if !rc.decode_bit(input, &mut self.is_rep0[self.state as usize])? {
-                    log!("distance is rep0: {}", self.rep[0]);
                     // rep0 has a special case: "short rep"
                     if !rc.decode_bit(
                         input,
                         &mut self.is_rep0_long[self.state as usize][pos_state],
                     )? {
-                        log!("performing a short rep");
                         dict.repeat(1, self.rep[0] + 1);
                         self.state.state_short_rep();
                         return Ok(());
@@ -219,14 +197,11 @@ impl LzmaDecoder {
                     let dist;
                     if !rc.decode_bit(input, &mut self.is_rep1[self.state as usize])? {
                         dist = self.rep[1];
-                        log!("distance is rep1: {}", dist);
                     } else {
                         if !rc.decode_bit(input, &mut self.is_rep2[self.state as usize])? {
                             dist = self.rep[2];
-                            log!("distance is rep2: {}", dist);
                         } else {
                             dist = self.rep[3];
-                            log!("distance is rep3: {}", dist);
                             self.rep[3] = self.rep[2];
                         }
                         self.rep[2] = self.rep[1];
@@ -236,14 +211,11 @@ impl LzmaDecoder {
                     dist
                 };
 
-                log!("performing a long rep");
                 self.state.state_long_rep();
 
                 let len = self.rep_len_dec.decode(input, rc, pos_state)?;
                 (len, dist)
             } else {
-                log!("distance is not a repeat");
-
                 (0..3).rev().for_each(|i| self.rep[i + 1] = self.rep[i]);
                 self.state.state_match();
 
@@ -253,21 +225,8 @@ impl LzmaDecoder {
                 (len, dist)
             };
 
-            log!("len: {len}");
-            log!("dist: {dist}");
-
             dict.repeat(len, dist + 1);
-
-            log!(
-                "dict: `{}` (len: {})",
-                String::from_utf8(dict.buf.clone())
-                    .unwrap_or_default()
-                    .replace("\n", "\\n"),
-                dict.len()
-            );
         } else {
-            log!("decoding literal");
-
             let lit_state = {
                 let prev_byte = dict.last().unwrap_or(0) as usize;
                 let low = prev_byte >> (8 - self.lc_bits);
@@ -277,18 +236,14 @@ impl LzmaDecoder {
             let literal_probs = &mut self.literal[lit_state];
 
             let literal = if self.state.is_literal() {
-                log!("last-seen symbol was literal");
-
                 // decode 8 bits
                 let mut result = 1usize;
                 while result < 0x100 {
                     result = (result << 1)
                         + (rc.decode_bit(input, &mut literal_probs[result])? as usize);
-                    log!("partial result: 0x{result:02X}");
                 }
                 result as u8
             } else {
-                log!("last-seen symbol was match");
                 let mut match_byte = dict.last_n(self.rep[0] + 1).unwrap() as usize;
 
                 // decode 8 bits
@@ -326,8 +281,6 @@ impl LzmaDecoder {
         rc: &mut RangeDecoder,
         len: usize,
     ) -> DecodeResult<usize> {
-        let _ctx = func!("LzmaDecoder::decode_distance(input, rc, len: {len})");
-
         let dist_state = if len < Self::DIST_STATES + Self::MATCH_LEN_MIN {
             len - Self::MATCH_LEN_MIN
         } else {

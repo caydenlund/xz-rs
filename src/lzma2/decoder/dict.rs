@@ -1,4 +1,3 @@
-use logomotion::log;
 use std::io::Write;
 
 pub(crate) struct Dict<W: Write> {
@@ -32,18 +31,6 @@ impl<W: Write> Dict<W> {
 
     pub(crate) fn extend(&mut self, bytes: &[u8]) {
         self.buf.extend_from_slice(bytes);
-        log!(
-            "\x1b[32mdecoded byte{}: [{}] `{}`",
-            if bytes.len() == 1 { "" } else { "s" },
-            bytes
-                .iter()
-                .map(|b| format!("0x{b:02X}"))
-                .collect::<Vec<_>>()
-                .join(", "),
-            String::from_utf8(bytes.to_vec())
-                .unwrap_or_default()
-                .replace("\n", "\\n")
-        );
     }
 
     pub(crate) fn flush(&mut self) -> std::io::Result<()> {
@@ -54,12 +41,6 @@ impl<W: Write> Dict<W> {
 
     pub(crate) fn push(&mut self, byte: u8) {
         self.buf.push(byte);
-        log!(
-            "\x1b[32mdecoded byte: [0x{byte:02X}] `{}`",
-            String::from_utf8(vec![byte])
-                .unwrap_or_default()
-                .replace("\n", "\\n")
-        );
     }
 
     pub(crate) fn repeat(&mut self, mut len: usize, mut dist: usize) {

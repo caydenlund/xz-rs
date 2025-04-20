@@ -1,12 +1,8 @@
-use std::io::BufRead;
-
-use crate::{
-    checksum::{Checksum, Crc32},
-    error::{DecodeError, DecodeResult, EncodeResult},
-    util::{Decode, Encode},
-};
-
 use super::{StreamDecodeError, StreamFlags};
+use crate::checksum::{Checksum, Crc32};
+use crate::error::{DecodeError, DecodeResult, EncodeResult};
+use crate::util::{Decode, Encode};
+use std::io::BufRead;
 
 const MAGIC_BYTES_LEN: usize = 6;
 const MAGIC_BYTES: [u8; MAGIC_BYTES_LEN] = [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00];

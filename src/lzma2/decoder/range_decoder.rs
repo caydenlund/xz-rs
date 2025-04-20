@@ -1,5 +1,3 @@
-use logomotion::{func, log};
-
 use crate::error::DecodeResult;
 use crate::util::InputRead;
 
@@ -29,8 +27,6 @@ impl RangeDecoder {
     /// If `self.range` has at least one byte of free space,
     /// then read one byte from the input into `self.code`.
     pub fn normalize<R: InputRead>(&mut self, input: &mut R) -> DecodeResult<()> {
-        let _ctx = func!("RangeDecoder::normalize(input)");
-
         if self.range < Self::RANGE_MIN {
             self.range <<= 8;
             self.code = (self.code << 8) + (input.read_u8()? as u32);
@@ -47,8 +43,6 @@ impl RangeDecoder {
         input: &mut R,
         prob: &mut u16,
     ) -> DecodeResult<bool> {
-        let _ctx = func!("RangeCoder::decode_bit(input, prob: 0x{prob:02X})");
-
         let bound = (self.range >> Self::BIT_MODEL_TOTAL_BITS) * (*prob as u32);
 
         let bit = self.code >= bound;
@@ -63,17 +57,13 @@ impl RangeDecoder {
 
         self.normalize(input)?;
 
-        log!("bit: {}", bit as u8);
-
         Ok(bit)
     }
 
     pub(crate) fn initialize<R: InputRead>(&mut self, input: &mut R) -> std::io::Result<()> {
-        let _ctx = func!("RangeCoder::initialize(input)");
         input.read_u8()?; // skip first byte
         self.range = u32::MAX;
         self.code = input.read_be_u32()?; // next 4 bytes are the initial code
-        log!("code: 0x{:08X}", self.code);
         Ok(())
     }
 
@@ -83,14 +73,11 @@ impl RangeDecoder {
         probs: &mut [u16],
         limit: usize,
     ) -> DecodeResult<usize> {
-        let _ctx = func!("RangeCoder::bit_tree(input, probs, limit: 0x{limit:08X} ({limit}))");
-
         let mut symbol = 1;
         while symbol < limit {
             let bit = self.decode_bit(input, &mut probs[symbol])?;
             symbol = (symbol << 1) + bit as usize;
         }
-        log!("result: 0x{symbol:08X} ({symbol})");
         Ok(symbol)
     }
 
@@ -101,8 +88,6 @@ impl RangeDecoder {
         mut initial: usize,
         limit: usize,
     ) -> DecodeResult<usize> {
-        let _ctx = func!("RangeDecoder::bit_tree_rev(input, probs, initial: 0x{initial:X} ({initial}), limit: 0x{limit:X} ({limit}))");
-
         let mut symbol = 1;
 
         for i in 0..limit.max(1) {
@@ -122,7 +107,6 @@ impl RangeDecoder {
         mut initial: u32,
         limit: usize,
     ) -> DecodeResult<u32> {
-        let _ctx = func!("RangeDecoder::direct(input, initial: 0x{initial:X} ({initial}), limit: 0x{limit:X} ({limit}))");
         for _ in 0..limit {
             self.normalize(input)?;
             self.range >>= 1;

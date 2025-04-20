@@ -1,8 +1,7 @@
-use std::io::Write;
-
+use crate::error::DecodeResult;
+use crate::util::InputRead;
 use lzma2_decoder::Lzma2Decoder;
-
-use crate::{error::DecodeResult, util::InputRead};
+use std::io::Write;
 
 mod dict;
 mod len_decoder;

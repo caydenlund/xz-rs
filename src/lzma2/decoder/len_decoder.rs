@@ -1,8 +1,7 @@
-use logomotion::{func, log};
-
-use crate::{error::DecodeResult, util::InputRead};
-
-use super::{lzma_decoder::LzmaDecoder, range_decoder::RangeDecoder};
+use super::lzma_decoder::LzmaDecoder;
+use super::range_decoder::RangeDecoder;
+use crate::error::DecodeResult;
+use crate::util::InputRead;
 
 pub(crate) struct LenDecoder {
     /// Probability of match length being >= 10.
@@ -42,8 +41,6 @@ impl LenDecoder {
     }
 
     pub(crate) fn reset(&mut self) {
-        let _ctx = func!("LenDecoder::reset()");
-
         self.choice = LzmaDecoder::DEFAULT_PROB;
         self.choice2 = LzmaDecoder::DEFAULT_PROB;
         self.low
@@ -59,22 +56,16 @@ impl LenDecoder {
         rc: &mut RangeDecoder,
         pos_state: usize,
     ) -> DecodeResult<usize> {
-        let _ctx =
-            func!("LenDecoder::decode(input, rc, pos_state: 0x{pos_state:08X} ({pos_state}))");
-
         let (probs, limit, start): (&mut [u16], usize, usize) =
             if !rc.decode_bit(input, &mut self.choice)? {
-                log!("low length");
                 (&mut self.low[pos_state], Self::LEN_LOW_SYMBOLS, 2)
             } else if !rc.decode_bit(input, &mut self.choice2)? {
-                log!("mid length");
                 (
                     &mut self.med[pos_state],
                     Self::LEN_MID_SYMBOLS,
                     2 + Self::LEN_LOW_SYMBOLS,
                 )
             } else {
-                log!("high length");
                 (
                     &mut self.high,
                     Self::LEN_HIGH_SYMBOLS,
@@ -82,8 +73,6 @@ impl LenDecoder {
                 )
             };
 
-        let result = start + rc.bit_tree(input, probs, limit)? - limit;
-        log!("result: {result}",);
-        Ok(result)
+        Ok(start + rc.bit_tree(input, probs, limit)? - limit)
     }
 }
