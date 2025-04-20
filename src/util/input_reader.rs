@@ -18,6 +18,18 @@ pub trait InputRead: BufRead {
         self.read_exact(&mut bytes)?;
         Ok(u32::from_be_bytes(bytes))
     }
+
+    fn read_le_u32(&mut self) -> std::io::Result<u32> {
+        let mut bytes = [0u8; 4];
+        self.read_exact(&mut bytes)?;
+        Ok(u32::from_le_bytes(bytes))
+    }
+
+    fn read_le_u64(&mut self) -> std::io::Result<u64> {
+        let mut bytes = [0u8; 8];
+        self.read_exact(&mut bytes)?;
+        Ok(u64::from_le_bytes(bytes))
+    }
 }
 
 impl<R: BufRead> InputRead for R {}

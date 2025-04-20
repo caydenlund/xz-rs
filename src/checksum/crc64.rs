@@ -8,7 +8,7 @@ static CRC64_TABLE: [u64; 256] = {
         let mut j = 0;
         while j < 8 {
             if crc & 1 == 1 {
-                crc = (crc >> 1) ^ 0x42F0E1EBA9EA3693;
+                crc = (crc >> 1) ^ 0xC96C5795D7870F42;
             } else {
                 crc >>= 1;
             }

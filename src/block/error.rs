@@ -16,4 +16,7 @@ pub enum BlockDecodeError {
 
     #[error("Invalid compressed data")]
     InvalidData,
+
+    #[error("Checksum didn't match")]
+    ChecksumMismatch,
 }
