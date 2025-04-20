@@ -123,13 +123,14 @@ impl RangeDecoder {
         limit: usize,
     ) -> DecodeResult<u32> {
         let _ctx = func!("RangeDecoder::direct(input, initial: 0x{initial:X} ({initial}), limit: 0x{limit:X} ({limit}))");
-        for _ in limit..0 {
+        for _ in 0..limit {
             self.normalize(input)?;
             self.range >>= 1;
-            self.code -= self.range;
-            let mask = 0 - (self.code >> 31);
-            self.code += self.range & mask;
-            initial = (initial << 1) + (mask + 1);
+            let bit = self.code >= self.range;
+            if bit {
+                self.code -= self.range
+            };
+            initial = (initial << 1) + (bit as u32);
         }
         Ok(initial)
     }

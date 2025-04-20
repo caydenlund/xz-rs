@@ -68,10 +68,18 @@ impl LenDecoder {
                 (&mut self.low[pos_state], Self::LEN_LOW_SYMBOLS, 2)
             } else if !rc.decode_bit(input, &mut self.choice2)? {
                 log!("mid length");
-                todo!()
+                (
+                    &mut self.med[pos_state],
+                    Self::LEN_MID_SYMBOLS,
+                    2 + Self::LEN_LOW_SYMBOLS,
+                )
             } else {
                 log!("high length");
-                todo!()
+                (
+                    &mut self.high,
+                    Self::LEN_HIGH_SYMBOLS,
+                    2 + Self::LEN_LOW_SYMBOLS + Self::LEN_MID_SYMBOLS,
+                )
             };
 
         let result = start + rc.bit_tree(input, probs, limit)? - limit;

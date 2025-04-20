@@ -1,4 +1,4 @@
-use std::io::{Cursor, Write};
+use std::io::Write;
 
 use logomotion::{func, log};
 
@@ -113,6 +113,7 @@ impl<W: Write> Lzma2Decoder<W> {
             self.lzma_dec.decode(&mut self.dict, &mut self.rc, input)?;
         }
 
-        todo!();
+        self.dict.flush()?;
+        Ok(())
     }
 }

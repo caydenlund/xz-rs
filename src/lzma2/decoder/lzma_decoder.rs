@@ -199,10 +199,10 @@ impl LzmaDecoder {
         if rc.decode_bit(input, &mut self.is_match[self.state as usize][pos_state])? {
             log!("decoding match");
 
-            if rc.decode_bit(input, &mut self.is_rep[self.state as usize])? {
+            let (len, dist) = if rc.decode_bit(input, &mut self.is_rep[self.state as usize])? {
                 log!("distance is repeated from 1 of the last 4 matches");
 
-                if !rc.decode_bit(input, &mut self.is_rep0[self.state as usize])? {
+                let dist = if !rc.decode_bit(input, &mut self.is_rep0[self.state as usize])? {
                     log!("distance is rep0: {}", self.rep[0]);
                     // rep0 has a special case: "short rep"
                     if !rc.decode_bit(
@@ -214,6 +214,7 @@ impl LzmaDecoder {
                         self.state.state_short_rep();
                         return Ok(());
                     }
+                    self.rep[0]
                 } else {
                     let dist;
                     if !rc.decode_bit(input, &mut self.is_rep1[self.state as usize])? {
@@ -232,37 +233,38 @@ impl LzmaDecoder {
                     }
                     self.rep[1] = self.rep[0];
                     self.rep[0] = dist;
-                }
+                    dist
+                };
 
                 log!("performing a long rep");
                 self.state.state_long_rep();
 
                 let len = self.rep_len_dec.decode(input, rc, pos_state)?;
-                log!("len: {len}");
-
-                todo!();
+                (len, dist)
             } else {
                 log!("distance is not a repeat");
 
                 (0..3).rev().for_each(|i| self.rep[i + 1] = self.rep[i]);
-
-                let len = self.match_len_dec.decode(input, rc, pos_state)?;
-                log!("len: {len}");
-
                 self.state.state_match();
 
+                let len = self.match_len_dec.decode(input, rc, pos_state)?;
                 let dist = self.decode_distance(input, rc, len)?;
-                log!("dist: {dist}");
-                dict.repeat(len, dist + 1);
 
-                log!(
-                    "dict: `{}` (len: {})",
-                    String::from_utf8(dict.buf.clone())
-                        .unwrap_or_default()
-                        .replace("\n", "\\n"),
-                    dict.len()
-                );
-            }
+                (len, dist)
+            };
+
+            log!("len: {len}");
+            log!("dist: {dist}");
+
+            dict.repeat(len, dist + 1);
+
+            log!(
+                "dict: `{}` (len: {})",
+                String::from_utf8(dict.buf.clone())
+                    .unwrap_or_default()
+                    .replace("\n", "\\n"),
+                dict.len()
+            );
         } else {
             log!("decoding literal");
 
@@ -304,8 +306,8 @@ impl LzmaDecoder {
                 }
 
                 while result < 0x100 {
-                    result = (result << 1)
-                        ^ (rc.decode_bit(input, &mut literal_probs[result])? as usize);
+                    result =
+                        (result << 1) + rc.decode_bit(input, &mut literal_probs[result])? as usize;
                 }
 
                 result as u8
