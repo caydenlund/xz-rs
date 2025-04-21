@@ -51,6 +51,7 @@ impl<W: Write> Lzma2Decoder<W> {
         let mut buf = vec![0; uncompressed_size];
         input.read_exact(&mut buf)?;
         self.dict.extend(&buf);
+        self.dict.flush()?;
 
         Ok(())
     }
