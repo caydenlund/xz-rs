@@ -9,6 +9,7 @@ fn main() {
         force: args.force,
         stdout: args.stdout,
     };
+
     let action = if args.list {
         Action::List
     } else if args.test {
