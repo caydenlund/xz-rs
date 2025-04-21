@@ -14,6 +14,9 @@ pub enum StreamDecodeError {
     #[error("{0}")]
     StreamFlagsError(#[from] StreamFlagsError),
 
+    #[error("Stream header/footer mismatch")]
+    HeaderFooterMismatch,
+
     #[error("Invalid stream header")]
     InvalidHeader,
 

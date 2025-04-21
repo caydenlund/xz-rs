@@ -7,6 +7,9 @@ pub use encode::*;
 mod checked_reader;
 pub use checked_reader::*;
 
+mod checked_writer;
+pub use checked_writer::*;
+
 mod input_reader;
 pub use input_reader::*;
 
